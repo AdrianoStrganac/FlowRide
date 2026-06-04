@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Sve je pomaknuto u sredinu između 18dp i 90dp -->
+
+    <!-- Kotač lijevi -->
+    <path
+        android:strokeWidth="3"
+        android:pathData="M36,66 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- Kotač desni -->
+    <path
+        android:strokeWidth="3"
+        android:pathData="M72,66 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- Okvir bicikla -->
+    <path
+        android:strokeWidth="3"
+        android:pathData="M36,66 L54,42 L72,66"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"/>
+
+    <path
+        android:strokeWidth="3"
+        android:pathData="M54,42 L66,66"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"/>
+
+    <!-- Sjedalo -->
+    <path
+        android:strokeWidth="3"
+        android:pathData="M48,42 L60,42"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"/>
+
+    <!-- Upravljač -->
+    <path
+        android:strokeWidth="3"
+        android:pathData="M68,54 L78,54 L78,60"
+        android:strokeColor="#FFFFFF"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"/>
+
+    <!-- List -->
+    <path
+        android:strokeWidth="1.5"
+        android:pathData="M56,34 C56,34 64,27 68,31 C72,35 64,41 56,34Z"
+        android:strokeColor="#7BC4A8"
+        android:fillColor="#7BC4A8"/>
+
+    <path
+        android:strokeWidth="1"
+        android:pathData="M56,34 L68,31"
+        android:strokeColor="#2D7A5F"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"/>
+
+</vector>
