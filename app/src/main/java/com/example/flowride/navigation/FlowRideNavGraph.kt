@@ -1,29 +1,27 @@
 package com.example.flowride.navigation
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.*
-import com.example.flowride.screens.*
-import com.example.flowride.components.AuthDialog
-import com.example.flowride.ui.theme.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import com.example.flowride.data.UserRepository
-import com.example.flowride.utils.ScannerUtils
-import androidx.compose.ui.platform.LocalContext
-import com.example.flowride.data.RentalRepository
-import com.example.flowride.data.ActiveRental
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.navigation.compose.*
+import com.example.flowride.components.AuthDialog
+import com.example.flowride.data.ActiveRental
+import com.example.flowride.data.RentalRepository
+import com.example.flowride.data.UserRepository
+import com.example.flowride.screens.*
+import com.example.flowride.ui.theme.*
+import com.example.flowride.utils.ScannerUtils
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.clickable
-
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -31,12 +29,12 @@ sealed class Screen(val route: String) {
     object Locations : Screen("locations")
     object Booking : Screen("booking_tab")
     object Profile : Screen("profile")
+    object Admin : Screen("admin")
     object Reservation : Screen("reservation/{bikeId}") {
         fun createRoute(bikeId: String) = "reservation/$bikeId"
     }
 }
 
-// Test-only hook to simulate scans
 var simulateScanAction: ((String) -> Unit)? = null
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,21 +45,22 @@ fun FlowRideNavGraph() {
     val currentUser = UserRepository.currentUser
     val isLoggedIn = currentUser != null
     val isAdmin = currentUser?.isAdmin ?: false
-    
+
     val homeListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    
+
     var showAuthDialog by remember { mutableStateOf(false) }
     var authMode by remember { mutableStateOf("login") }
     var allowDismissOutside by remember { mutableStateOf(true) }
     var isFromRentalsTab by remember { mutableStateOf(false) }
     var scannedRental by remember { mutableStateOf<ActiveRental?>(null) }
 
-    // Register test hook
     LaunchedEffect(Unit) {
         simulateScanAction = { result ->
-            val rental = RentalRepository.allRentalsForAdmin.find { it.id == result }
-            scannedRental = rental
+            coroutineScope.launch {
+                val rental = RentalRepository.findRentalById(result)
+                scannedRental = rental
+            }
         }
     }
 
@@ -69,8 +68,8 @@ fun FlowRideNavGraph() {
         AuthDialog(
             mode = authMode,
             allowDismissOutside = allowDismissOutside,
-            onDismiss = { 
-                showAuthDialog = false 
+            onDismiss = {
+                showAuthDialog = false
                 if (isFromRentalsTab) {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
@@ -112,9 +111,7 @@ fun FlowRideNavGraph() {
                             .padding(start = 6.dp)
                             .size(32.dp)
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Text("🌿", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -123,11 +120,13 @@ fun FlowRideNavGraph() {
                     if (isAdmin) {
                         IconButton(onClick = {
                             ScannerUtils.startScanner(context) { result ->
-                        if (result != null) {
-                            val rental = RentalRepository.allRentalsForAdmin.find { it.id == result }
-                            scannedRental = rental
-                        }
-                    }
+                                if (result != null) {
+                                    coroutineScope.launch {
+                                        val rental = RentalRepository.findRentalById(result)
+                                        scannedRental = rental
+                                    }
+                                }
+                            }
                         }) {
                             Icon(
                                 imageVector = Icons.Outlined.QrCodeScanner,
@@ -162,7 +161,8 @@ fun FlowRideNavGraph() {
         bottomBar = {
             FlowRideBottomBar(
                 navController = navController,
-                isLoggedIn = isLoggedIn
+                isLoggedIn = isLoggedIn,
+                isAdmin = isAdmin
             )
         }
     ) { padding ->
@@ -174,11 +174,11 @@ fun FlowRideNavGraph() {
             composable(Screen.Home.route) {
                 HomeScreen(
                     isLoggedIn = isLoggedIn,
-                    onLoginRequired = { 
+                    onLoginRequired = {
                         authMode = "login"
                         allowDismissOutside = true
                         isFromRentalsTab = false
-                        showAuthDialog = true 
+                        showAuthDialog = true
                     },
                     onBikeSelected = { bikeId ->
                         navController.navigate(Screen.Reservation.createRoute(bikeId))
@@ -218,7 +218,7 @@ fun FlowRideNavGraph() {
                     LaunchedEffect(Unit) {
                         authMode = "login"
                         allowDismissOutside = false
-                        isFromRentalsTab = true // reusing the same logic to force return to home on cancel
+                        isFromRentalsTab = true
                         showAuthDialog = true
                     }
                 }
@@ -231,10 +231,23 @@ fun FlowRideNavGraph() {
                             navController.popBackStack(Screen.Home.route, inclusive = false)
                         },
                         onDeleteAccount = {
-                            UserRepository.deleteAccount()
-                            navController.popBackStack(Screen.Home.route, inclusive = false)
+                            coroutineScope.launch {
+                                UserRepository.deleteAccount()
+                                navController.popBackStack(Screen.Home.route, inclusive = false)
+                            }
                         }
                     )
+                } else {
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    }
+                }
+            }
+            composable(Screen.Admin.route) {
+                if (isAdmin) {
+                    AdminScreen()
                 } else {
                     LaunchedEffect(Unit) {
                         navController.navigate(Screen.Home.route) {
@@ -261,6 +274,8 @@ fun FlowRideNavGraph() {
 
 @Composable
 fun ScannedRentalDialog(rental: ActiveRental, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -279,15 +294,23 @@ fun ScannedRentalDialog(rental: ActiveRental, onDismiss: () -> Unit) {
                     modifier = Modifier.size(64.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = Primary, modifier = Modifier.size(32.dp))
+                        Icon(
+                            Icons.Outlined.CheckCircle, null,
+                            tint = Primary,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("Podaci o rezervaciji", style = MaterialTheme.typography.headlineSmall)
-                Text("Rezervacija je valjana i potvrđena", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                
+                Text(
+                    "Rezervacija je valjana i potvrđena",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+
                 Spacer(Modifier.height(24.dp))
-                
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -300,13 +323,15 @@ fun ScannedRentalDialog(rental: ActiveRental, onDismiss: () -> Unit) {
                     ScannedInfoRow("Status plaćanja", "Plaćeno (${rental.paymentMethod})")
                     ScannedInfoRow("Lokacija", rental.pickupLocation)
                 }
-                
+
                 Spacer(Modifier.height(32.dp))
-                
+
                 Button(
                     onClick = {
-                        RentalRepository.confirmRental(rental.id)
-                        onDismiss()
+                        scope.launch {
+                            RentalRepository.confirmRental(rental.id)
+                            onDismiss()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Primary),

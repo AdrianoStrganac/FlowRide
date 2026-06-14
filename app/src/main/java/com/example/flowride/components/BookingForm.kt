@@ -10,13 +10,17 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.launch
 import com.example.flowride.data.ActiveRental
 import com.example.flowride.data.RentalRepository
-import com.example.flowride.screens.BikeModel
+import com.example.flowride.data.BikeModelFirestore
 import com.example.flowride.screens.rentalLocations
 import com.example.flowride.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.platform.LocalContext
+import com.example.flowride.utils.NotificationHelper
+import androidx.compose.material3.SelectableDates
 
 data class PaymentMethod(val id: String, val label: String, val icon: ImageVector)
 
@@ -28,10 +32,15 @@ val paymentMethods = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BookingForm(bike: BikeModel, onClose: () -> Unit, onSuccess: () -> Unit) {
+fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     // Filter locations based on bike category
     val availableLocations = remember(bike.categoryId) {
-        rentalLocations.filter { it.allowedBikeCategoryIds.contains(bike.categoryId) }
+        rentalLocations.filter { loc ->
+            loc.allowedBikeCategoryIds.isEmpty() ||
+                    loc.allowedBikeCategoryIds.contains(bike.categoryId)
+        }
     }
 
     var hours by remember { mutableIntStateOf(2) }
@@ -43,16 +52,28 @@ fun BookingForm(bike: BikeModel, onClose: () -> Unit, onSuccess: () -> Unit) {
     var dateError by remember { mutableStateOf(false) }
 
     val today = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
+        val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zagreb"))
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.timeInMillis
     }
 
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = today
+        initialSelectedDateMillis = today + java.util.TimeZone.getTimeZone("Europe/Zagreb").getOffset(today),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                val calUtc = Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zagreb"))
+                calUtc.timeInMillis = utcTimeMillis
+                val calToday = Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zagreb"))
+                calToday.set(Calendar.HOUR_OF_DAY, 0)
+                calToday.set(Calendar.MINUTE, 0)
+                calToday.set(Calendar.SECOND, 0)
+                calToday.set(Calendar.MILLISECOND, 0)
+                return calUtc.timeInMillis >= calToday.timeInMillis
+            }
+        }
     )
 
     // Manual date text state for testing and alternative input
@@ -340,7 +361,7 @@ fun BookingForm(bike: BikeModel, onClose: () -> Unit, onSuccess: () -> Unit) {
                     readOnly = true,
                     leadingIcon = { Icon(Icons.Outlined.LocationOn, null, tint = Primary) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(locationExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Primary,
@@ -476,7 +497,16 @@ fun BookingForm(bike: BikeModel, onClose: () -> Unit, onSuccess: () -> Unit) {
                         userName = user?.name ?: "Gost",
                         userEmail = user?.email ?: ""
                     )
-                    RentalRepository.addRental(rental)
+                    scope.launch {
+                        RentalRepository.addRental(rental)
+                        NotificationHelper.showReservationConfirmation(
+                            context = context,
+                            vehicleName = bike.name,
+                            date = startDate,
+                            location = selectedLocation,
+                            total = total
+                        )
+                    }
                     showSuccessDialog = true
                 },
                 modifier = Modifier.fillMaxWidth(),

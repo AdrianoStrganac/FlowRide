@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "536279864130",
+    "firebase_url": "https://flowride-4495c-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "flowride-4495c",
+    "storage_bucket": "flowride-4495c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:536279864130:android:0af4b807c281671cfb2edb",
+        "android_client_info": {
+          "package_name": "com.example.flowride"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRoJJ0CjeGeNNZpRO6xoJjktI73w1_8jk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

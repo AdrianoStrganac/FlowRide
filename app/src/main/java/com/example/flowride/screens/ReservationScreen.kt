@@ -7,17 +7,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.flowride.components.BikeCard
+import com.example.flowride.components.BikeCardFirestore
 import com.example.flowride.components.BookingForm
+import com.example.flowride.data.BikeModelFirestore
+import com.example.flowride.data.VehicleRepository
 import com.example.flowride.ui.theme.Primary
 
 @Composable
 fun ReservationScreen(bikeId: String?, onComplete: () -> Unit, onBack: () -> Unit) {
     var selectedBikeId by remember { mutableStateOf(bikeId) }
-    val bike = bikes.find { it.id == selectedBikeId }
     val scrollState = rememberScrollState()
 
-    // Reset scroll to top whenever the selected bike changes
+    val categories = VehicleRepository.categories
+    val allVehicles = VehicleRepository.vehicles
+    val bike: BikeModelFirestore? = allVehicles.find { it.id == selectedBikeId }
+
     LaunchedEffect(selectedBikeId) {
         scrollState.scrollTo(0)
     }
@@ -29,48 +33,62 @@ fun ReservationScreen(bikeId: String?, onComplete: () -> Unit, onBack: () -> Uni
             .padding(8.dp)
     ) {
         if (bike != null) {
-                BookingForm(
-                    bike = bike,
-                    onClose = {
-                        if (bikeId == null) {
-                            selectedBikeId = null
-                        } else {
-                            onBack()
-                        }
-                    },
-                    onSuccess = onComplete
-                )
+            BookingForm(
+                bike = bike,
+                onClose = {
+                    if (bikeId == null) {
+                        selectedBikeId = null
+                    } else {
+                        onBack()
+                    }
+                },
+                onSuccess = onComplete
+            )
+        } else {
+            Text(
+                "Odaberi vozilo za rezervaciju",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            if (categories.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Primary)
+                }
             } else {
-                Text(
-                    "Odaberi vozilo za rezervaciju",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                
-                bikeCategories.forEach { category ->
+                categories.forEach { category ->
+                    val models = VehicleRepository.getVehiclesForCategory(category.id)
                     Text(
                         category.name,
                         style = MaterialTheme.typography.titleMedium,
                         color = Primary,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
-                    category.models.forEach { model ->
-                        BikeCard(
+                    models.forEach { model ->
+                        BikeCardFirestore(
                             bike = model,
-                            isSelected = false,
                             onClick = { selectedBikeId = model.id }
                         )
                         Spacer(Modifier.height(12.dp))
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                
-                Button(
-                    onClick = onBack,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
-                ) {
-                    Text("Povratak")
+            }
+
+            Button(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Text("Povratak")
             }
         }
     }

@@ -15,6 +15,7 @@ import com.example.flowride.data.UserRepository
 import com.example.flowride.ui.theme.Primary
 import com.example.flowride.ui.theme.PrimaryLight
 import com.example.flowride.ui.theme.TextMuted
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthDialog(
@@ -31,14 +32,19 @@ fun AuthDialog(
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = { if (allowDismissOutside) onDismiss() },
         containerColor = MaterialTheme.colorScheme.surface,
         shape = MaterialTheme.shapes.extraLarge,
         title = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Surface(
                     shape = MaterialTheme.shapes.extraLarge,
                     color = PrimaryLight,
@@ -50,12 +56,16 @@ fun AuthDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Text(if (isLogin) "Dobrodošli natrag" else "Kreiraj račun",
-                    style = MaterialTheme.typography.headlineSmall)
-                Text(if (isLogin) "Prijavite se za eko-putovanje"
-                else "Registriraj se za iznajmljivanje",
+                Text(
+                    if (isLogin) "Dobrodošli natrag" else "Kreiraj račun",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    if (isLogin) "Prijavite se za eko-putovanje"
+                    else "Registriraj se za iznajmljivanje",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted)
+                    color = TextMuted
+                )
             }
         },
         text = {
@@ -64,60 +74,104 @@ fun AuthDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (!isLogin) {
-                    OutlinedTextField(value = name, onValueChange = { name = it },
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it },
                         label = { Text("Puno ime") },
                         leadingIcon = { Icon(Icons.Outlined.Person, null) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium)
-                    
-                    OutlinedTextField(value = phone, onValueChange = { phone = it },
+                        shape = MaterialTheme.shapes.medium
+                    )
+                    OutlinedTextField(
+                        value = phone, onValueChange = { phone = it },
                         label = { Text("Broj mobitela") },
                         leadingIcon = { Icon(Icons.Outlined.Phone, null) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium)
-                    
-                    OutlinedTextField(value = address, onValueChange = { address = it },
+                        shape = MaterialTheme.shapes.medium
+                    )
+                    OutlinedTextField(
+                        value = address, onValueChange = { address = it },
                         label = { Text("Adresa stanovanja") },
                         leadingIcon = { Icon(Icons.Outlined.LocationOn, null) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium)
+                        shape = MaterialTheme.shapes.medium
+                    )
                 }
-                
-                OutlinedTextField(value = email, onValueChange = { email = it },
+
+                OutlinedTextField(
+                    value = email, onValueChange = { email = it },
                     label = { Text("Email") },
                     leadingIcon = { Icon(Icons.Outlined.Email, null) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium)
-                
-                OutlinedTextField(value = password, onValueChange = { password = it },
+                    shape = MaterialTheme.shapes.medium
+                )
+
+                OutlinedTextField(
+                    value = password, onValueChange = { password = it },
                     label = { Text("Lozinka") },
                     leadingIcon = { Icon(Icons.Outlined.Lock, null) },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium)
+                    shape = MaterialTheme.shapes.medium
+                )
 
-                TextButton(onClick = onSwitchMode, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text(if (isLogin) "Nemaš račun? Registriraj se"
-                    else "Već imaš račun? Prijavi se",
-                        color = Primary)
+                if (errorMessage.isNotEmpty()) {
+                    Text(
+                        errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                TextButton(
+                    onClick = onSwitchMode,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        if (isLogin) "Nemaš račun? Registriraj se"
+                        else "Već imaš račun? Prijavi se",
+                        color = Primary
+                    )
                 }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                if (isLogin) {
-                    UserRepository.login(email)
-                } else {
-                    UserRepository.register(name, email, phone, address)
-                }
-                onSuccess()
-            },
+            Button(
+                onClick = {
+                    errorMessage = ""
+                    coroutineScope.launch {
+                        isLoading = true
+                        val success = if (isLogin) {
+                            UserRepository.login(email, password)
+                        } else {
+                            UserRepository.register(name, email, phone, address, password)
+                        }
+                        isLoading = false
+                        if (success) {
+                            onSuccess()
+                        } else {
+                            errorMessage = if (isLogin)
+                                "Pogrešan email ili lozinka."
+                            else
+                                "Registracija nije uspjela. Provjeri podatke."
+                        }
+                    }
+                },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
-                Text(if (isLogin) "Prijava" else "Kreiraj račun")
+                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = androidx.compose.ui.graphics.Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(if (isLogin) "Prijava" else "Kreiraj račun")
+                }
             }
         },
         dismissButton = {

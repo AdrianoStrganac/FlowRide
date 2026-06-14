@@ -20,10 +20,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
-import com.example.flowride.components.BikeCard
+import com.example.flowride.components.BikeCardFirestore
+import com.example.flowride.data.BikeCategoryFirestore
+import com.example.flowride.data.VehicleRepository
 import com.example.flowride.ui.theme.*
 import kotlinx.coroutines.launch
 
+// Zadržavamo stare klase zbog kompatibilnosti s ostalim dijelovima koda
 data class BikeModel(
     val id: String,
     val name: String,
@@ -32,7 +35,7 @@ data class BikeModel(
     val description: String,
     val imageRes: Any,
     val features: List<String>,
-    val categoryId: String // Added to link model to its parent category
+    val categoryId: String
 )
 
 data class BikeCategory(
@@ -44,67 +47,8 @@ data class BikeCategory(
     val models: List<BikeModel>
 )
 
-val bikeCategories = listOf(
-    BikeCategory(
-        "classic", "Klasični bicikli", "🚲",
-        "Savršen za opuštene gradske vožnje",
-        "https://images.unsplash.com/photo-1768347443976-3eda4373bc1a?w=600",
-        listOf(
-            BikeModel("classic_mtb", "Mountain Bike", "⛰️", 6,
-                "Spreman za sve terene i avanture",
-                imageRes = com.example.flowride.R.drawable.mtb_bike,
-                features = listOf("Disk kočnice", "12 brzina", "Prednja suspenzija"),
-                categoryId = "classic"),
-            BikeModel("classic_road", "Gradski Road Bike", "🏙️", 5,
-                "Lagani bicikl za brzu gradsku vožnju",
-                imageRes = com.example.flowride.R.drawable.road_bike,
-                features = listOf("Lagani okvir", "Tanke gume", "Sportski sic"),
-                categoryId = "classic"),
-            BikeModel("classic_gravel", "Gravel Bike", "🌲", 8,
-                "Sposoban bicikl za veliku udaljenosti kroz urbane puteve",
-                imageRes = com.example.flowride.R.drawable.gravel_bike,
-                features = listOf("Lagani okvir s dodatnom opremom", "Izdržljive gume", "Sportski sic"),
-                categoryId = "classic")
-        )
-    ),
-    BikeCategory(
-        "ebike", "E-Bicikli", "⚡",
-        "Električna vožnja za dulje relacije",
-        "https://images.unsplash.com/photo-1760588774830-2a9f3bf4965d?w=600",
-        listOf(
-            BikeModel("ebike_city", "E-City Cruiser", "🚲", 8,
-                "Najudobnija električna vožnja",
-                imageRes = com.example.flowride.R.drawable.e_city_cruiser,
-                features = listOf("Doseg 60km", "Udobno sjedalo", "Pedalna asistencija"),
-                categoryId = "ebike"),
-            BikeModel("ebike_cargo", "E-Cargo Bike", "📦", 10,
-                "Prevezi teret s lakoćom",
-                imageRes = com.example.flowride.R.drawable.e_cargo_bike,
-                features = listOf("Veliki prtljažnik", "Snažan motor", "Doseg 40km"),
-                categoryId = "ebike")
-        )
-    ),
-    BikeCategory(
-        "scooter", "E-Romobili", "🛴",
-        "Brz i okretan gradski prijevoz",
-        "https://images.unsplash.com/photo-1558981403-c5f91cbba527?w=600",
-        listOf(
-            BikeModel("scooter_pro", "Scooter Pro", "💨", 8,
-                "Maksimalna brzina i stabilnost",
-                imageRes = com.example.flowride.R.drawable.e_scooter_pro,
-                features = listOf("Doseg 45km", "Apsorpcija udaraca", "Digitalni zaslon"),
-                categoryId = "scooter"),
-            BikeModel("scooter_lite", "Scooter Lite", "☁️", 6,
-                "Lagani i lako sklopivi romobil",
-                imageRes = com.example.flowride.R.drawable.e_scooter_lite,
-                features = listOf("Težina 12kg", "Sklopiv", "Doseg 20km"),
-                categoryId = "scooter")
-        )
-    ),
-)
-
-// Helper list for screens that need to find a specific bike by ID
-val bikes = bikeCategories.flatMap { it.models }
+// Zadržavamo bikes val zbog ReservationScreen koji ga koristi
+val bikes: List<BikeModel> = emptyList()
 
 @Composable
 fun HomeScreen(
@@ -115,6 +59,9 @@ fun HomeScreen(
 ) {
     var expandedCategoryId by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+
+    val categories = VehicleRepository.categories
+    val isLoading = categories.isEmpty()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -137,51 +84,69 @@ fun HomeScreen(
             }
         }
 
-        itemsIndexed(bikeCategories) { index, category ->
-            val isExpanded = expandedCategoryId == category.id
-            
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                CategoryCard(
-                    category = category,
-                    isExpanded = isExpanded,
+        if (isLoading) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Primary)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Učitavanje vozila...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted
+                        )
+                    }
+                }
+            }
+        } else {
+            itemsIndexed(categories) { index, category ->
+                val isExpanded = expandedCategoryId == category.id
+                val models = VehicleRepository.getVehiclesForCategory(category.id)
+
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    CategoryCardFirestore(
+                        category = category,
+                        isExpanded = isExpanded,
                         onClick = {
                             val wasExpanded = isExpanded
                             expandedCategoryId = if (wasExpanded) null else category.id
-                            
                             if (!wasExpanded) {
                                 coroutineScope.launch {
-                                    // Small delay to allow the state change to trigger the animation
-                                    // and ensure the scroll targets the correct layout position
                                     kotlinx.coroutines.delay(50)
                                     listState.animateScrollToItem(index + 2)
                                 }
                             }
                         }
-                )
+                    )
 
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = expandVertically(),
-                    exit = shrinkVertically()
-                ) {
-                    Column(modifier = Modifier.padding(top = 12.dp, start = 8.dp, end = 8.dp)) {
-                        category.models.forEach { model ->
-                            BikeCard(
-                                bike = model,
-                                isSelected = false,
-                                onClick = {
-                                    if (!isLoggedIn) {
-                                        onLoginRequired()
-                                        return@BikeCard
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        Column(modifier = Modifier.padding(top = 12.dp, start = 8.dp, end = 8.dp)) {
+                            models.forEach { model ->
+                                BikeCardFirestore(
+                                    bike = model,
+                                    onClick = {
+                                        if (!isLoggedIn) {
+                                            onLoginRequired()
+                                            return@BikeCardFirestore
+                                        }
+                                        onBikeSelected(model.id)
                                     }
-                                    onBikeSelected(model.id)
-                                }
-                            )
-                            Spacer(Modifier.height(12.dp))
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
                         }
                     }
+                    Spacer(Modifier.height(12.dp))
                 }
-                Spacer(Modifier.height(12.dp))
             }
         }
 
@@ -195,11 +160,18 @@ fun HomeScreen(
 }
 
 @Composable
-fun CategoryCard(category: BikeCategory, isExpanded: Boolean, onClick: () -> Unit) {
+fun CategoryCardFirestore(
+    category: BikeCategoryFirestore,
+    isExpanded: Boolean,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        border = androidx.compose.foundation.BorderStroke(if (isExpanded) 2.dp else 1.dp, if (isExpanded) Primary else Border),
+        border = androidx.compose.foundation.BorderStroke(
+            if (isExpanded) 2.dp else 1.dp,
+            if (isExpanded) Primary else Border
+        ),
         colors = CardDefaults.cardColors(containerColor = Surface),
         onClick = onClick
     ) {
@@ -221,7 +193,11 @@ fun CategoryCard(category: BikeCategory, isExpanded: Boolean, onClick: () -> Uni
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(category.name, style = MaterialTheme.typography.titleMedium)
-                Text(category.description, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                Text(
+                    category.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
             }
             Icon(
                 imageVector = if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -231,7 +207,6 @@ fun CategoryCard(category: BikeCategory, isExpanded: Boolean, onClick: () -> Uni
         }
     }
 }
-
 
 @Composable
 fun HeroSection() {
@@ -278,18 +253,26 @@ fun HeroSection() {
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.LocationOn, null,
-                        tint = Color.White, modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Outlined.LocationOn, null,
+                        tint = Color.White, modifier = Modifier.size(16.dp)
+                    )
                     Spacer(Modifier.width(4.dp))
-                    Text("50+ lokacija", color = Color.White,
-                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "50+ lokacija", color = Color.White,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AccessTime, null,
-                        tint = Color.White, modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Outlined.AccessTime, null,
+                        tint = Color.White, modifier = Modifier.size(16.dp)
+                    )
                     Spacer(Modifier.width(4.dp))
-                    Text("Dostupno 24/7", color = Color.White,
-                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Dostupno 24/7", color = Color.White,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -330,9 +313,11 @@ fun FeaturesSection() {
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(icon, null,
+                            Icon(
+                                icon, null,
                                 tint = Color.White,
-                                modifier = Modifier.size(22.dp))
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     }
                     Spacer(Modifier.width(14.dp))
