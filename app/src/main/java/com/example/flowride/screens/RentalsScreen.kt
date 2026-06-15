@@ -12,12 +12,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
 import com.example.flowride.data.ActiveRental
 import com.example.flowride.data.RentalRepository
 import com.example.flowride.ui.theme.*
 import com.example.flowride.utils.QrGenerator
+import java.util.Locale
 
 @Composable
 fun RentalsScreen() {
@@ -104,12 +106,21 @@ fun RentalsScreen() {
 
 @Composable
 fun RentalCard(rental: ActiveRental, onShowQr: () -> Unit) {
-    val isActive = rental.status == "active"
+    val status = rental.status
+    val isActive = status == "active"
+    val isInProgress = status == "in_progress"
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         border = androidx.compose.foundation.BorderStroke(
-            1.5.dp, if (isActive) Primary.copy(alpha = 0.4f) else Border),
+            1.5.dp, 
+            when(status) {
+                "in_progress" -> Primary
+                "active" -> Primary.copy(alpha = 0.4f)
+                else -> Border
+            }
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -118,15 +129,17 @@ fun RentalCard(rental: ActiveRental, onShowQr: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = MaterialTheme.shapes.extraLarge,
-                        color = if (isActive) Primary else SurfaceMuted,
+                        color = if (isInProgress) Primary else if (isActive) PrimaryLight else SurfaceMuted,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                if (isActive) Icons.Outlined.ElectricBolt
+                                if (isInProgress) Icons.Outlined.Timer
+                                else if (isActive) Icons.Outlined.ElectricBolt
                                 else Icons.Outlined.DirectionsBike,
                                 null,
-                                tint = if (isActive) androidx.compose.ui.graphics.Color.White
+                                tint = if (isInProgress) androidx.compose.ui.graphics.Color.White
+                                else if (isActive) Primary
                                 else TextMuted,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -139,14 +152,20 @@ fun RentalCard(rental: ActiveRental, onShowQr: () -> Unit) {
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("ID: ${rental.id}",
                                 style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                            if (isActive) {
-                                Surface(shape = MaterialTheme.shapes.extraLarge,
-                                    color = PrimaryLight) {
-                                    Text("Aktivan",
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = Primary)
-                                }
+                            
+                            val statusLabel = when(status) {
+                                "active" -> "Rezervirano"
+                                "in_progress" -> "U tijeku"
+                                "completed" -> "Završeno"
+                                else -> status
+                            }
+                            
+                            Surface(shape = MaterialTheme.shapes.extraLarge,
+                                color = if (isInProgress) Primary else if (isActive) PrimaryLight else SurfaceMuted) {
+                                Text(statusLabel,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isInProgress) androidx.compose.ui.graphics.Color.White else if (isActive) Primary else TextMuted)
                             }
                         }
                     }
@@ -157,6 +176,11 @@ fun RentalCard(rental: ActiveRental, onShowQr: () -> Unit) {
                     Text(rental.duration,
                         style = MaterialTheme.typography.labelMedium, color = TextMuted)
                 }
+            }
+
+            if (isInProgress && rental.startTimeMillis != null) {
+                Spacer(Modifier.height(16.dp))
+                RentalTimer(rental.startTimeMillis, rental.durationMinutes)
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Border)
@@ -270,6 +294,63 @@ fun QrCodeDialog(rental: ActiveRental, onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun RentalTimer(startTimeMillis: Long, durationMinutes: Int) {
+    var timeLeftMillis by remember { 
+        mutableLongStateOf(
+            (startTimeMillis + durationMinutes * 60 * 1000) - System.currentTimeMillis()
+        ) 
+    }
+
+    LaunchedEffect(Unit) {
+        while (timeLeftMillis > 0) {
+            kotlinx.coroutines.delay(1000)
+            timeLeftMillis = (startTimeMillis + durationMinutes * 60 * 1000) - System.currentTimeMillis()
+        }
+    }
+
+    val totalSeconds = (timeLeftMillis / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    val progress = (timeLeftMillis.toFloat() / (durationMinutes * 60 * 1000)).coerceIn(0f, 1f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PrimaryLight.copy(alpha = 0.5f), MaterialTheme.shapes.medium)
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(Icons.Outlined.Timer, null, tint = Primary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().height(8.dp),
+            color = Primary,
+            trackColor = Border,
+            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        Text(
+            "Preostalo vrijeme najma",
+            style = MaterialTheme.typography.labelSmall,
+            color = TextMuted,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 

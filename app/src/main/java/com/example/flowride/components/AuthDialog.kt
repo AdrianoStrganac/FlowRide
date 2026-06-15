@@ -143,19 +143,22 @@ fun AuthDialog(
                     errorMessage = ""
                     coroutineScope.launch {
                         isLoading = true
-                        val success = if (isLogin) {
-                            UserRepository.login(email, password)
+                        if (isLogin) {
+                            val success = UserRepository.login(email, password)
+                            isLoading = false
+                            if (success) {
+                                onSuccess()
+                            } else {
+                                errorMessage = "Pogrešan email ili lozinka."
+                            }
                         } else {
-                            UserRepository.register(name, email, phone, address, password)
-                        }
-                        isLoading = false
-                        if (success) {
-                            onSuccess()
-                        } else {
-                            errorMessage = if (isLogin)
-                                "Pogrešan email ili lozinka."
-                            else
-                                "Registracija nije uspjela. Provjeri podatke."
+                            val registerError = UserRepository.register(name, email, phone, address, password)
+                            isLoading = false
+                            if (registerError == null) {
+                                onSuccess()
+                            } else {
+                                errorMessage = registerError
+                            }
                         }
                     }
                 },

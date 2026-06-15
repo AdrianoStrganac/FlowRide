@@ -13,7 +13,8 @@ data class BikeModelFirestore(
     val description: String = "",
     val imageUrl: String = "",
     val features: List<String> = emptyList(),
-    val categoryId: String = ""
+    val categoryId: String = "",
+    val isAvailable: Boolean = true
 )
 
 data class BikeCategoryFirestore(
@@ -93,7 +94,24 @@ object VehicleRepository {
         }
     }
 
-    fun getVehiclesForCategory(categoryId: String): List<BikeModelFirestore> {
-        return _vehicles.filter { it.categoryId == categoryId }
+    suspend fun toggleAvailability(vehicleId: String, currentStatus: Boolean) {
+        try {
+            val newStatus = !currentStatus
+            db.collection("vehicles").document(vehicleId).update("isAvailable", newStatus).await()
+            val index = _vehicles.indexOfFirst { it.id == vehicleId }
+            if (index != -1) {
+                _vehicles[index] = _vehicles[index].copy(isAvailable = newStatus)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun getVehiclesForCategory(categoryId: String, onlyAvailable: Boolean = false): List<BikeModelFirestore> {
+        return if (onlyAvailable) {
+            _vehicles.filter { it.categoryId == categoryId && it.isAvailable }
+        } else {
+            _vehicles.filter { it.categoryId == categoryId }
+        }
     }
 }

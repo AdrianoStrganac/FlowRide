@@ -14,11 +14,13 @@ data class BottomNavItem(val screen: Screen, val label: String, val icon: ImageV
 fun FlowRideBottomBar(
     navController: NavController,
     isLoggedIn: Boolean,
-    isAdmin: Boolean = false
+    isAdmin: Boolean = false,
+    onHomeReselected: () -> Unit = {}
 ) {
     val baseItems = listOf(
         BottomNavItem(Screen.Home, "Početna", Icons.Outlined.Home),
         BottomNavItem(Screen.Locations, "Lokacije", Icons.Outlined.LocationOn),
+        BottomNavItem(Screen.Booking, "Rezerviraj", Icons.Outlined.CalendarMonth),
         BottomNavItem(Screen.Rentals, "Moji najmi", Icons.Outlined.List),
     )
 
@@ -36,7 +38,11 @@ fun FlowRideBottomBar(
             NavigationBarItem(
                 selected = current == item.screen.route,
                 onClick = {
-                    navController.navigate(item.screen.route) { launchSingleTop = true }
+                    if (current == item.screen.route) {
+                        if (item.screen == Screen.Home) onHomeReselected()
+                    } else {
+                        navController.navigate(item.screen.route) { launchSingleTop = true }
+                    }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },
                 label = { Text(item.label) }

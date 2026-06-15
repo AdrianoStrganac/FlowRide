@@ -62,21 +62,25 @@ fun ReservationScreen(bikeId: String?, onComplete: () -> Unit, onBack: () -> Uni
                 }
             } else {
                 categories.forEach { category ->
-                    val models = VehicleRepository.getVehiclesForCategory(category.id)
-                    Text(
-                        category.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Primary,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    models.forEach { model ->
-                        BikeCardFirestore(
-                            bike = model,
-                            onClick = { selectedBikeId = model.id }
+                    // Dohvati samo dostupna vozila za običnog korisnika
+                    val models = VehicleRepository.getVehiclesForCategory(category.id, onlyAvailable = true)
+                    
+                    if (models.isNotEmpty()) {
+                        Text(
+                            category.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Primary,
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
-                        Spacer(Modifier.height(12.dp))
+                        models.forEach { model ->
+                            BikeCardFirestore(
+                                bike = model,
+                                onClick = { selectedBikeId = model.id }
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
             }
 

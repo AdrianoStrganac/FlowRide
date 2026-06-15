@@ -3,6 +3,7 @@ package com.example.flowride.data
 import androidx.compose.runtime.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.PropertyName
 import kotlinx.coroutines.tasks.await
 
 data class UserProfile(
@@ -12,7 +13,10 @@ data class UserProfile(
     val phone: String = "",
     val address: String = "",
     val profilePicture: String? = null,
-    val isAdmin: Boolean = false
+    @get:PropertyName("isAdmin")
+    @set:PropertyName("isAdmin")
+    var isAdmin: Boolean = false,
+    val fcmToken: String = "",
 )
 
 object UserRepository {
@@ -51,25 +55,32 @@ object UserRepository {
         phone: String,
         address: String,
         password: String
-    ): Boolean {
+    ): String? { // Vraća null ako je uspješno, inače poruku greške
         return try {
             val result = auth.createUserWithEmailAndPassword(email, password).await()
-            val uid = result.user?.uid ?: return false
-            val isAdmin = email.lowercase().contains("admin")
+            val uid = result.user?.uid ?: return "Greška pri kreiranju UID-a"
+            val isUserAdmin = email.lowercase().contains("admin")
             val user = UserProfile(
                 uid = uid,
                 name = name,
                 email = email,
                 phone = phone,
                 address = address,
-                isAdmin = isAdmin
+                isAdmin = isUserAdmin
             )
             db.collection("users").document(uid).set(user).await()
             _currentUser = user
             saveFcmToken(uid)
-            true
+            null
         } catch (e: Exception) {
-            false
+            e.printStackTrace()
+            android.util.Log.e("UserRepository", "Register error: ${e.message}")
+            when (e) {
+                is com.google.firebase.auth.FirebaseAuthUserCollisionException -> "Ovaj email je već u upotrebi. Pokušaj se prijaviti."
+                is com.google.firebase.auth.FirebaseAuthWeakPasswordException -> "Lozinka je preslaba (min. 6 znakova)."
+                is com.google.firebase.FirebaseException -> e.localizedMessage ?: "Greška na Firebase serveru."
+                else -> "Greška: ${e.message}"
+            }
         }
     }
 

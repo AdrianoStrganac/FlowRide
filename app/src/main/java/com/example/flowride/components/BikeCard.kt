@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import coil.compose.AsyncImage
 import androidx.compose.ui.platform.testTag
@@ -117,13 +118,17 @@ fun BikeCard(bike: BikeModel, isSelected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun BikeCardFirestore(bike: BikeModelFirestore, onClick: () -> Unit) {
+    val isAvailable = bike.isAvailable
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("bike_card_${bike.id}"),
         shape = MaterialTheme.shapes.large,
-        border = BorderStroke(1.dp, Border),
-        colors = CardDefaults.cardColors(containerColor = Surface),
+        border = BorderStroke(1.dp, if (isAvailable) Border else Color.Red.copy(alpha = 0.3f)),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAvailable) Surface else Surface.copy(alpha = 0.8f)
+        ),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column {
@@ -132,7 +137,8 @@ fun BikeCardFirestore(bike: BikeModelFirestore, onClick: () -> Unit) {
                     model = bike.imageUrl,
                     contentDescription = bike.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = if (isAvailable) 1f else 0.5f
                 )
                 Surface(
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
@@ -140,6 +146,22 @@ fun BikeCardFirestore(bike: BikeModelFirestore, onClick: () -> Unit) {
                     color = Color.White.copy(alpha = 0.9f)
                 ) {
                     Text(bike.emoji, modifier = Modifier.padding(8.dp), fontSize = 18.sp)
+                }
+                
+                if (!isAvailable) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color.Black.copy(alpha = 0.7f),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(
+                            "TRENUTNO NEDOSTUPNO",
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -149,11 +171,15 @@ fun BikeCardFirestore(bike: BikeModelFirestore, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text(bike.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        bike.name, 
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isAvailable) MaterialTheme.colorScheme.onSurface else TextMuted
+                    )
                     Column(horizontalAlignment = Alignment.End) {
                         Text("$${bike.pricePerHour}",
                             style = MaterialTheme.typography.headlineSmall,
-                            color = Primary)
+                            color = if (isAvailable) Primary else TextMuted)
                         Text("po satu",
                             style = MaterialTheme.typography.labelMedium,
                             color = TextMuted)
@@ -173,24 +199,27 @@ fun BikeCardFirestore(bike: BikeModelFirestore, onClick: () -> Unit) {
                         Box(modifier = Modifier
                             .size(6.dp)
                             .clip(MaterialTheme.shapes.extraLarge)
-                            .background(Primary))
+                            .background(if (isAvailable) Primary else TextMuted))
                         Spacer(Modifier.width(8.dp))
-                        Text(feature, style = MaterialTheme.typography.bodySmall)
+                        Text(feature, style = MaterialTheme.typography.bodySmall, color = if (isAvailable) MaterialTheme.colorScheme.onSurface else TextMuted)
                     }
                 }
 
                 Spacer(Modifier.height(12.dp))
 
                 Button(
-                    onClick = onClick,
+                    onClick = if (isAvailable) onClick else { {} },
+                    enabled = isAvailable,
                     modifier = Modifier.fillMaxWidth().testTag("select_button_${bike.id}"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryLight,
-                        contentColor = Primary
+                        containerColor = if (isAvailable) PrimaryLight else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (isAvailable) Primary else TextMuted,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = TextMuted
                     ),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("Odaberi")
+                    Text(if (isAvailable) "Odaberi" else "Nije dostupno")
                 }
             }
         }

@@ -485,6 +485,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                     val endDate = sdf.format(Date(endMillis))
 
                     val user = com.example.flowride.data.UserRepository.currentUser
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
                     val rental = ActiveRental(
                         id = "R${System.currentTimeMillis().toString().takeLast(6)}",
                         vehicleType = bike.name,
@@ -495,8 +496,11 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                         price = total,
                         paymentMethod = selectedPayment,
                         userName = user?.name ?: "Gost",
-                        userEmail = user?.email ?: ""
+                        userEmail = user?.email ?: "",
+                        uid = uid,
+                        durationMinutes = hours * 60
                     )
+
                     scope.launch {
                         RentalRepository.addRental(rental)
                         NotificationHelper.showReservationConfirmation(

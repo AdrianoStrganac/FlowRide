@@ -120,9 +120,11 @@ fun FlowRideNavGraph() {
                     if (isAdmin) {
                         IconButton(onClick = {
                             ScannerUtils.startScanner(context) { result ->
+                                android.util.Log.d("FlowRideNav", "Scanner result: $result")
                                 if (result != null) {
                                     coroutineScope.launch {
                                         val rental = RentalRepository.findRentalById(result)
+                                        android.util.Log.d("FlowRideNav", "Found rental: ${rental?.id}")
                                         scannedRental = rental
                                     }
                                 }
@@ -162,7 +164,12 @@ fun FlowRideNavGraph() {
             FlowRideBottomBar(
                 navController = navController,
                 isLoggedIn = isLoggedIn,
-                isAdmin = isAdmin
+                isAdmin = isAdmin,
+                onHomeReselected = {
+                    coroutineScope.launch {
+                        homeListState.animateScrollToItem(0)
+                    }
+                }
             )
         }
     ) { padding ->
@@ -329,7 +336,7 @@ fun ScannedRentalDialog(rental: ActiveRental, onDismiss: () -> Unit) {
                 Button(
                     onClick = {
                         scope.launch {
-                            RentalRepository.confirmRental(rental.id)
+                            RentalRepository.startRental(rental.id)
                             onDismiss()
                         }
                     },
@@ -337,7 +344,7 @@ fun ScannedRentalDialog(rental: ActiveRental, onDismiss: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("Potvrdi najam")
+                    Text("Započni najam (Preuzeto)")
                 }
             }
         }
