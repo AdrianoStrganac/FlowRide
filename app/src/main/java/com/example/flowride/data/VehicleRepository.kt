@@ -3,6 +3,8 @@ package com.example.flowride.data
 import androidx.compose.runtime.mutableStateListOf
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.PropertyName
 import kotlinx.coroutines.tasks.await
 
 data class BikeModelFirestore(
@@ -14,7 +16,9 @@ data class BikeModelFirestore(
     val imageUrl: String = "",
     val features: List<String> = emptyList(),
     val categoryId: String = "",
-    val isAvailable: Boolean = true
+    @get:PropertyName("isAvailable")
+    @set:PropertyName("isAvailable")
+    var isAvailable: Boolean = true
 )
 
 data class BikeCategoryFirestore(
@@ -39,20 +43,67 @@ object VehicleRepository {
     private val _categories = mutableStateListOf<BikeCategoryFirestore>()
     val categories: List<BikeCategoryFirestore> get() = _categories
 
+    // Čuvamo listener da ga možemo ukloniti
+    private var vehiclesListener: ListenerRegistration? = null
+
+    // VehicleRepository.kt — dodaj:
+    private val _pendingToggles = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun getEffectiveAvailability(vehicleId: String): Boolean {
+        return _pendingToggles[vehicleId]
+            ?: _vehicles.find { it.id == vehicleId }?.isAvailable
+            ?: true
+    }
+
+    suspend fun toggleAvailability(vehicleId: String, newStatus: Boolean) {
+        android.util.Log.d("VehicleRepo", "toggleAvailability: id=$vehicleId, newStatus=$newStatus")
+        _pendingToggles[vehicleId] = newStatus
+        try {
+            db.collection("vehicles").document(vehicleId)
+                .update("isAvailable", newStatus).await()
+            android.util.Log.d("VehicleRepo", "Firestore update success")
+            // NE uklanjamo iz _pendingToggles ovdje
+        } catch (e: Exception) {
+            android.util.Log.e("VehicleRepo", "Firestore update FAILED: ${e.message}", e)
+            _pendingToggles.remove(vehicleId) // ukloni samo ako greška
+        }
+    }
+
+    fun startVehiclesListener() {
+        vehiclesListener?.remove()
+        vehiclesListener = db.collection("vehicles")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.e("VehicleRepo", "Listener error: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    _vehicles.clear()
+                    _vehicles.addAll(snapshot.toObjects(BikeModelFirestore::class.java))
+                    // Ukloni pending toggles za vozila čiji status je potvrđen iz Firestorea
+                    _vehicles.forEach { vehicle ->
+                        val pending = _pendingToggles[vehicle.id]
+                        if (pending != null && pending == vehicle.isAvailable) {
+                            _pendingToggles.remove(vehicle.id)
+                        }
+                    }
+                    android.util.Log.d("VehicleRepo", "Real-time update: ${_vehicles.size} vozila")
+                }
+            }
+    }
+
+    fun stopVehiclesListener() {
+        vehiclesListener?.remove()
+        vehiclesListener = null
+    }
+
+    // Zadržavamo loadVehicles za inicijalnu provjeru je li lista prazna
     suspend fun loadVehicles() {
         try {
-            android.util.Log.d("VehicleRepo", "Starting loadVehicles...")
             val snapshot = db.collection("vehicles").get().await()
-            android.util.Log.d("VehicleRepo", "Got ${snapshot.size()} documents")
-            snapshot.documents.forEach { doc ->
-                android.util.Log.d("VehicleRepo", "Doc: ${doc.id} -> ${doc.data}")
-            }
             _vehicles.clear()
             _vehicles.addAll(snapshot.toObjects(BikeModelFirestore::class.java))
-            android.util.Log.d("VehicleRepo", "Mapped ${_vehicles.size} vehicles")
-            _vehicles.forEach { v ->
-                android.util.Log.d("VehicleRepo", "Vehicle: ${v.id} - ${v.name} - category: ${v.categoryId}")
-            }
+            android.util.Log.d("VehicleRepo", "Loaded ${_vehicles.size} vehicles")
         } catch (e: Exception) {
             android.util.Log.e("VehicleRepo", "Error: ${e.message}", e)
         }
@@ -60,12 +111,10 @@ object VehicleRepository {
 
     suspend fun loadCategories() {
         try {
-            android.util.Log.d("VehicleRepo", "Starting loadCategories...")
             val snapshot = db.collection("categories").orderBy("order").get().await()
-            android.util.Log.d("VehicleRepo", "Got ${snapshot.size()} categories")
             _categories.clear()
             _categories.addAll(snapshot.toObjects(BikeCategoryFirestore::class.java))
-            android.util.Log.d("VehicleRepo", "Loaded categories: ${_categories.size}")
+            android.util.Log.d("VehicleRepo", "Loaded ${_categories.size} categories")
         } catch (e: Exception) {
             android.util.Log.e("VehicleRepo", "Error loading categories: ${e.message}", e)
         }
@@ -74,12 +123,7 @@ object VehicleRepository {
     suspend fun saveVehicle(vehicle: BikeModelFirestore) {
         try {
             db.collection("vehicles").document(vehicle.id).set(vehicle).await()
-            val index = _vehicles.indexOfFirst { it.id == vehicle.id }
-            if (index != -1) {
-                _vehicles[index] = vehicle
-            } else {
-                _vehicles.add(vehicle)
-            }
+            // Listener će automatski osvježiti listu
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -88,30 +132,22 @@ object VehicleRepository {
     suspend fun deleteVehicle(vehicleId: String) {
         try {
             db.collection("vehicles").document(vehicleId).delete().await()
-            _vehicles.removeIf { it.id == vehicleId }
+            // Listener će automatski osvježiti listu
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    suspend fun toggleAvailability(vehicleId: String, currentStatus: Boolean) {
-        try {
-            val newStatus = !currentStatus
-            db.collection("vehicles").document(vehicleId).update("isAvailable", newStatus).await()
-            val index = _vehicles.indexOfFirst { it.id == vehicleId }
-            if (index != -1) {
-                _vehicles[index] = _vehicles[index].copy(isAvailable = newStatus)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
 
-    fun getVehiclesForCategory(categoryId: String, onlyAvailable: Boolean = false): List<BikeModelFirestore> {
+    fun getVehiclesForCategory(
+        categoryId: String,
+        onlyAvailable: Boolean = false
+    ): List<BikeModelFirestore> {
+        val filtered = _vehicles.filter { it.categoryId == categoryId }
         return if (onlyAvailable) {
-            _vehicles.filter { it.categoryId == categoryId && it.isAvailable }
+            filtered.filter { getEffectiveAvailability(it.id) }
         } else {
-            _vehicles.filter { it.categoryId == categoryId }
+            filtered
         }
     }
 }

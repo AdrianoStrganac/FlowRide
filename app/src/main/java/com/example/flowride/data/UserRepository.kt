@@ -43,19 +43,20 @@ object UserRepository {
             val doc = db.collection("users").document(uid).get().await()
             _currentUser = doc.toObject(UserProfile::class.java)
             saveFcmToken(uid)
+            RentalRepository.loadRentals()        // ← dodaj
+            RentalRepository.loadScannedRentals() // ← dodaj
             true
         } catch (e: Exception) {
             false
         }
     }
-
     suspend fun register(
         name: String,
         email: String,
         phone: String,
         address: String,
         password: String
-    ): String? { // Vraća null ako je uspješno, inače poruku greške
+    ): String? {
         return try {
             val result = auth.createUserWithEmailAndPassword(email, password).await()
             val uid = result.user?.uid ?: return "Greška pri kreiranju UID-a"
@@ -71,6 +72,8 @@ object UserRepository {
             db.collection("users").document(uid).set(user).await()
             _currentUser = user
             saveFcmToken(uid)
+            RentalRepository.loadRentals()
+            RentalRepository.loadScannedRentals()
             null
         } catch (e: Exception) {
             e.printStackTrace()
@@ -85,8 +88,9 @@ object UserRepository {
     }
 
     fun logout() {
-        auth.signOut()
+        FirebaseAuth.getInstance().signOut()
         _currentUser = null
+        RentalRepository.clearAll()
     }
 
     suspend fun deleteAccount() {

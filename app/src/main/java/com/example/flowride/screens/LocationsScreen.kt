@@ -22,50 +22,76 @@ data class RentalLocation(
     val description: String,
     val count: Int,
     val latLng: LatLng,
+    val city: String = "Zagreb",
     val allowedBikeCategoryIds: List<String> = listOf("classic", "ebike", "scooter")
 )
 
 val rentalLocations = listOf(
-    // Zagreb City
-    RentalLocation("Central Park Station", "Centar grada", 12, LatLng(45.8150, 15.9819)),
-    RentalLocation("Downtown Terminal", "Poslovni kvart", 8, LatLng(45.8120, 15.9750)),
-    RentalLocation("Harbor Point", "Uz obalu", 6, LatLng(45.8200, 15.9900)),
-    RentalLocation("University Campus", "Sveučilišno područje", 15, LatLng(45.8250, 15.9600)),
-    
-    // Sljeme (Mountain/Nature) - No scooters or city cruisers
+    // ─── Zagreb ───────────────────────────────────────────────
+    RentalLocation("Trg bana Jelačića", "Glavni gradski trg", 18, LatLng(45.8131, 15.9775), "Zagreb"),
+    RentalLocation("Glavni kolodvor", "Željeznički kolodvor", 14, LatLng(45.8048, 15.9786), "Zagreb"),
+    RentalLocation("Jarun", "Jezero i rekreacija", 20, LatLng(45.7780, 15.9180), "Zagreb"),
+    RentalLocation("Bundek", "Park uz Savu", 12, LatLng(45.7920, 15.9890), "Zagreb"),
+    RentalLocation("Maksimir", "Park i ZOO", 10, LatLng(45.8280, 16.0190), "Zagreb"),
+    RentalLocation("Trešnjevka", "Stambeni kvart", 9, LatLng(45.8030, 15.9460), "Zagreb"),
     RentalLocation(
-        "Sljeme - Vrh", 
-        "Planinarski dom", 
-        5, 
-        LatLng(45.9000, 15.9480),
-        allowedBikeCategoryIds = listOf("classic") // Only Mountain/Gravel bikes here
-    ),
-    
-    // Samobor (Nature/City)
-    RentalLocation(
-        "Samobor - Trg", 
-        "Nature & History", 
-        10, 
-        LatLng(45.8000, 15.7100),
-        allowedBikeCategoryIds = listOf("classic", "ebike")
+        "Sljeme - Vrh", "Planinarski dom", 5, LatLng(45.8990, 15.9480), "Zagreb",
+        allowedBikeCategoryIds = listOf("classic")
     ),
 
-    // Jarun (Lake/Park)
-    RentalLocation("Jarun Lake", "Rekreacijska zona", 20, LatLng(45.7780, 15.9180)),
-    
-    // Varaždin (Another city)
-    RentalLocation("Varaždin Centar", "Barokni grad", 14, LatLng(46.3080, 16.3380)),
+    // ─── Zagreb okolica ───────────────────────────────────────
+    RentalLocation(
+        "Samobor - Trg", "Povijesna jezgra", 8, LatLng(45.8000, 15.7100), "Zagreb okolica",
+        allowedBikeCategoryIds = listOf("classic", "ebike")
+    ),
+    RentalLocation("Velika Gorica", "Centar grada", 7, LatLng(45.7130, 16.0760), "Zagreb okolica"),
+    RentalLocation("Zaprešić", "Stanica zapad", 6, LatLng(45.8570, 15.8080), "Zagreb okolica"),
+
+    // ─── Split ────────────────────────────────────────────────
+    RentalLocation("Riva Split", "Gradska luka", 16, LatLng(43.5081, 16.4402), "Split"),
+    RentalLocation("Bačvice", "Plaža i šetnica", 13, LatLng(43.5030, 16.4520), "Split"),
+    RentalLocation(
+        "Marjan", "Park-šuma", 8, LatLng(43.5090, 16.4180), "Split",
+        allowedBikeCategoryIds = listOf("classic", "ebike")
+    ),
+    RentalLocation("Žnjan", "Obalna zona", 11, LatLng(43.5140, 16.4790), "Split"),
+
+    // ─── Rijeka ───────────────────────────────────────────────
+    RentalLocation("Korzo Rijeka", "Glavna pješačka zona", 15, LatLng(45.3270, 14.4420), "Rijeka"),
+    RentalLocation("Molo Longo", "Lukobran", 9, LatLng(45.3160, 14.4350), "Rijeka"),
+    RentalLocation("Trsat", "Gradina i vidikovac", 6, LatLng(45.3290, 14.4640), "Rijeka"),
+    RentalLocation("Kantrida", "Uz more", 8, LatLng(45.3390, 14.3850), "Rijeka"),
+
+    // ─── Osijek ───────────────────────────────────────────────
+    RentalLocation("Tvrđa", "Barokna jezgra", 12, LatLng(45.5610, 18.6960), "Osijek"),
+    RentalLocation("Promenada", "Šetnica uz Dravu", 14, LatLng(45.5580, 18.6820), "Osijek"),
+    RentalLocation("Gradski vrt", "Sportski centar", 10, LatLng(45.5530, 18.7050), "Osijek"),
+    RentalLocation("Copacabana", "Gradska plaža", 9, LatLng(45.5650, 18.6710), "Osijek"),
+)
+
+val cityOrder = listOf("Zagreb", "Zagreb okolica", "Split", "Rijeka", "Osijek")
+
+val cityCenter = mapOf(
+    "Zagreb" to LatLng(45.8131, 15.9775),
+    "Zagreb okolica" to LatLng(45.8000, 15.8000),
+    "Split" to LatLng(43.5081, 16.4402),
+    "Rijeka" to LatLng(45.3270, 14.4420),
+    "Osijek" to LatLng(45.5580, 18.6820),
 )
 
 @Composable
 fun LocationsScreen() {
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(45.8150, 15.9819), 10f)
+        position = CameraPosition.fromLatLngZoom(LatLng(45.8131, 15.9775), 10f)
     }
     var mapTouched by remember { mutableStateOf(false) }
     var selectedLocation by remember { mutableStateOf<RentalLocation?>(null) }
+    var selectedCity by remember { mutableStateOf("Zagreb") }
     val coroutineScope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
+
+    val filteredLocations = rentalLocations.filter { it.city == selectedCity }
+    val groupedLocations = rentalLocations.groupBy { it.city }
 
     LazyVerticalGrid(
         state = gridState,
@@ -75,6 +101,7 @@ fun LocationsScreen() {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         userScrollEnabled = !mapTouched
     ) {
+        // ─── Naslov ───────────────────────────────────────────
         item(span = { GridItemSpan(2) }) {
             Column {
                 Text(
@@ -89,6 +116,7 @@ fun LocationsScreen() {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
+                // ─── Karta ────────────────────────────────────
                 GoogleMap(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -109,7 +137,8 @@ fun LocationsScreen() {
                         zoomGesturesEnabled = true,
                     )
                 ) {
-                    rentalLocations.forEach { loc ->
+                    // Prikaži samo markere odabranog grada
+                    filteredLocations.forEach { loc ->
                         Marker(
                             state = MarkerState(position = loc.latLng),
                             title = loc.name,
@@ -119,23 +148,55 @@ fun LocationsScreen() {
                 }
 
                 Spacer(Modifier.height(16.dp))
+
+                // ─── Filter chipovi po gradu ──────────────────
+                ScrollableTabRow(
+                    selectedTabIndex = cityOrder.indexOf(selectedCity),
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = Primary,
+                    edgePadding = 0.dp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    cityOrder.forEach { city ->
+                        val count = groupedLocations[city]?.size ?: 0
+                        Tab(
+                            selected = selectedCity == city,
+                            onClick = {
+                                selectedCity = city
+                                selectedLocation = null
+                                coroutineScope.launch {
+                                    gridState.animateScrollToItem(0)
+                                    cityCenter[city]?.let { center ->
+                                        cameraPositionState.animate(
+                                            update = CameraUpdateFactory.newCameraPosition(
+                                                CameraPosition.fromLatLngZoom(center, 12f)
+                                            ),
+                                            durationMs = 600
+                                        )
+                                    }
+                                }
+                            },
+                            text = {
+                                Text("$city ($count)")
+                            }
+                        )
+                    }
+                }
             }
         }
 
-        items(rentalLocations) { loc ->
+        // ─── Kartice lokacija za odabrani grad ────────────────
+        items(filteredLocations) { loc ->
             LocationCard(
                 loc = loc,
                 isSelected = selectedLocation?.name == loc.name,
                 onClick = {
                     selectedLocation = loc
                     coroutineScope.launch {
-                        // Scroll to the top to show the map
                         gridState.animateScrollToItem(0)
-                        
-                        // Zoom into the location on the map
                         cameraPositionState.animate(
                             update = CameraUpdateFactory.newCameraPosition(
-                                CameraPosition.fromLatLngZoom(loc.latLng, 14f)
+                                CameraPosition.fromLatLngZoom(loc.latLng, 15f)
                             ),
                             durationMs = 800
                         )
@@ -182,16 +243,17 @@ fun LocationCard(
             Text(loc.name, style = MaterialTheme.typography.titleMedium)
             Text(loc.description, style = MaterialTheme.typography.bodySmall, color = TextMuted)
             Spacer(Modifier.height(8.dp))
-            
-            // Show available categories badges
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (loc.allowedBikeCategoryIds.contains("classic")) Text("🚲", fontSize = 12.sp)
                 if (loc.allowedBikeCategoryIds.contains("ebike")) Text("⚡", fontSize = 12.sp)
                 if (loc.allowedBikeCategoryIds.contains("scooter")) Text("🛴", fontSize = 12.sp)
             }
-            
             Spacer(Modifier.height(4.dp))
-            Text("${loc.count} vozila", style = MaterialTheme.typography.headlineSmall, color = Primary)
+            Text(
+                "${loc.count} vozila",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Primary
+            )
         }
     }
 }

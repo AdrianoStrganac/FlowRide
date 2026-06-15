@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.flowride.components.BikeCardFirestore
 import com.example.flowride.components.BookingForm
+import com.example.flowride.components.CategoryShimmer
 import com.example.flowride.data.BikeModelFirestore
 import com.example.flowride.data.VehicleRepository
 import com.example.flowride.ui.theme.Primary
@@ -20,7 +21,11 @@ fun ReservationScreen(bikeId: String?, onComplete: () -> Unit, onBack: () -> Uni
 
     val categories = VehicleRepository.categories
     val allVehicles = VehicleRepository.vehicles
-    val bike: BikeModelFirestore? = allVehicles.find { it.id == selectedBikeId }
+    
+    // Provjeri dostupnost i ovdje u slučaju da je netko došao preko direktnog linka/ID-a
+    val bike: BikeModelFirestore? = allVehicles.find { 
+        it.id == selectedBikeId && VehicleRepository.getEffectiveAvailability(it.id) 
+    }
 
     LaunchedEffect(selectedBikeId) {
         scrollState.scrollTo(0)
@@ -52,13 +57,10 @@ fun ReservationScreen(bikeId: String?, onComplete: () -> Unit, onBack: () -> Uni
             )
 
             if (categories.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                Column {
+                    repeat(4) {
+                        CategoryShimmer()
+                    }
                 }
             } else {
                 categories.forEach { category ->

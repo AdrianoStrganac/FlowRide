@@ -45,9 +45,12 @@ class MainActivity : ComponentActivity() {
             UserRepository.init()
             VehicleRepository.loadCategories()
             VehicleRepository.loadVehicles()
+            VehicleRepository.startVehiclesListener()
             RentalRepository.loadRentals()
+            RentalRepository.loadScannedRentals()
             isReady = true
         }
+
 
         enableEdgeToEdge()
         setContent {
@@ -55,5 +58,10 @@ class MainActivity : ComponentActivity() {
                 FlowRideNavGraph()
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        VehicleRepository.stopVehiclesListener()
     }
 }

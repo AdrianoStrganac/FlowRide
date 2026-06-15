@@ -23,51 +23,61 @@ data class ActiveRental(
 
 object RentalRepository {
     private val _rentals = mutableStateListOf<ActiveRental>()
+    private val _adminScannedRentals = mutableStateListOf<ActiveRental>()
+
     private val db = FirebaseFirestore.getInstance()
 
     val rentals: List<ActiveRental> get() = _rentals
 
-    val allRentalsForAdmin: List<ActiveRental> get() = _rentals
+    val allRentalsForAdmin: List<ActiveRental> get() = _adminScannedRentals
+
+    fun clearRentals() {
+        _rentals.clear()
+        // NE brišemo _adminScannedRentals ovdje
+    }
+
+    fun clearAll() {
+        _rentals.clear()
+        _adminScannedRentals.clear()
+    }
+
+    fun updateScannedRental(rental: ActiveRental) {
+        val index = _adminScannedRentals.indexOfFirst { it.id == rental.id }
+        if (index != -1) {
+            _adminScannedRentals[index] = rental
+        }
+    }
 
     suspend fun loadRentals() {
         try {
             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                ?: return
+            android.util.Log.d("RentalRepo", "loadRentals start: uid=$uid")
 
-            // 1. Prvo učitaj rezervacije za trenutnog korisnika
-            val snapshot = db.collection("users")
-                .document(uid)
-                .collection("rentals")
-                .get().await()
-
-            val userRentals = snapshot.toObjects(ActiveRental::class.java)
+            if (uid == null) {
+                _rentals.clear()
+                android.util.Log.d("RentalRepo", "No user logged in, clearing rentals")
+                return
+            }
 
             _rentals.clear()
-            _rentals.addAll(userRentals)
 
-            android.util.Log.d("RentalRepo", "Loaded ${userRentals.size} rentals for uid=$uid")
-
-            // 2. Ako je korisnik admin, učitaj SVE rezervacije od SVIH korisnika
             val isAdmin = UserRepository.currentUser?.isAdmin ?: false
-            if (isAdmin) {
-                val allUsers = db.collection("users").get().await()
-                val allRentalsList = mutableListOf<ActiveRental>()
+            android.util.Log.d("RentalRepo", "isAdmin=$isAdmin, currentUser=${UserRepository.currentUser?.email}")
 
-                for (userDoc in allUsers.documents) {
-                    val rentalsSnap = userDoc.reference.collection("rentals").get().await()
-                    allRentalsList.addAll(rentalsSnap.toObjects(ActiveRental::class.java))
+            if (!isAdmin) {
+                val snapshot = db.collection("users")
+                    .document(uid)
+                    .collection("rentals")
+                    .get().await()
+                val userRentals = snapshot.toObjects(ActiveRental::class.java)
+                android.util.Log.d("RentalRepo", "Loaded ${userRentals.size} rentals from Firestore")
+                userRentals.forEach {
+                    android.util.Log.d("RentalRepo", "  rental: id=${it.id}, status=${it.status}")
                 }
-
-                _rentals.clear()
-                _rentals.addAll(allRentalsList)
-                android.util.Log.d(
-                    "RentalRepo",
-                    "Admin mode: Loaded ${_rentals.size} total rentals"
-                )
+                _rentals.addAll(userRentals)
             }
         } catch (e: Exception) {
-            android.util.Log.e("RentalRepo", "Error loading rentals: ${e.message}")
-            e.printStackTrace()
+            android.util.Log.e("RentalRepo", "Error: ${e.message}", e)
         }
     }
 
@@ -172,5 +182,51 @@ object RentalRepository {
             android.util.Log.e("RentalRepo", "Error: ${e.message}", e)
             null
         }
+    }
+
+    // Spremi skenirani rental ID u Firestore
+    suspend fun saveScannedRentalId(rentalId: String) {
+        val adminUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        try {
+            db.collection("users").document(adminUid)
+                .collection("scannedRentals").document(rentalId)
+                .set(mapOf("rentalId" to rentalId)).await()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Učitaj sve skenirane rentale pri startu
+    suspend fun loadScannedRentals() {
+        val adminUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val isAdmin = UserRepository.currentUser?.isAdmin ?: false
+        if (!isAdmin) return
+
+        try {
+            val scannedIds = db.collection("users").document(adminUid)
+                .collection("scannedRentals").get().await()
+
+            for (doc in scannedIds.documents) {
+                val rentalId = doc.getString("rentalId") ?: continue
+                val rental = findRentalById(rentalId)
+                if (rental != null) {
+                    addScannedRental(rental)
+                }
+            }
+            android.util.Log.d("RentalRepo", "Loaded ${_adminScannedRentals.size} scanned rentals for admin")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun addScannedRental(rental: ActiveRental) {
+        if (_adminScannedRentals.none { it.id == rental.id }) {
+            _adminScannedRentals.add(rental)
+        }
+    }
+
+    suspend fun addAndSaveScannedRental(rental: ActiveRental) {
+        addScannedRental(rental)
+        saveScannedRentalId(rental.id)
     }
 }

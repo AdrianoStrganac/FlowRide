@@ -35,7 +35,7 @@ val paymentMethods = listOf(
 fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    // Filter locations based on bike category
+
     val availableLocations = remember(bike.categoryId) {
         rentalLocations.filter { loc ->
             loc.allowedBikeCategoryIds.isEmpty() ||
@@ -49,6 +49,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
     var locationExpanded by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
     var dateError by remember { mutableStateOf(false) }
 
     val today = remember {
@@ -76,20 +77,14 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
         }
     )
 
-    // Manual date text state for testing and alternative input
     val sdf = remember { SimpleDateFormat("dd. MM. yyyy.", Locale.getDefault()) }
-    var dateText by remember { 
-        mutableStateOf(sdf.format(Date(today))) 
-    }
+    var dateText by remember { mutableStateOf(sdf.format(Date(today))) }
 
-    // Update text when date is picked from calendar or changed manually
     LaunchedEffect(datePickerState.selectedDateMillis) {
         val selected = datePickerState.selectedDateMillis
         if (selected != null) {
             val formatted = sdf.format(Date(selected))
-            if (dateText != formatted) {
-                dateText = formatted
-            }
+            if (dateText != formatted) dateText = formatted
         }
         dateError = false
     }
@@ -99,12 +94,9 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
         try {
             val parsedDate = sdf.parse(newText)
             if (parsedDate != null && parsedDate.time != datePickerState.selectedDateMillis) {
-                // Ensure we don't cause a loop if it's already the same date
                 datePickerState.selectedDateMillis = parsedDate.time
             }
-        } catch (e: Exception) {
-            // Invalid format while typing, wait for valid input
-        }
+        } catch (e: Exception) { }
     }
 
     val selectedDateFormatted = datePickerState.selectedDateMillis?.let {
@@ -113,6 +105,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
 
     val total = bike.pricePerHour * hours
 
+    // ─── Success Dialog ───────────────────────────────────────────────────────
     if (showSuccessDialog) {
         AlertDialog(
             onDismissRequest = {},
@@ -125,11 +118,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                     modifier = Modifier.size(64.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.CheckCircle, null,
-                            tint = Primary,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Icon(Icons.Outlined.CheckCircle, null, tint = Primary, modifier = Modifier.size(32.dp))
                     }
                 }
             },
@@ -157,36 +146,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                         shape = MaterialTheme.shapes.medium,
                         color = PrimaryLight,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row {
-                                Text("Datum: ", style = MaterialTheme.typography.labelMedium)
-                                Text(selectedDateFormatted, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Row {
-                                Text("Trajanje: ", style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    "$hours ${if (hours == 1) "sat" else "sata"}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Row {
-                                Text("Lokacija: ", style = MaterialTheme.typography.labelMedium)
-                                Text(selectedLocation, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Row {
-                                Text("Ukupno: ", style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    "$$total",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Primary
-                                )
-                            }
-                        }
-                    }
+                    ) {}
                 }
             },
             confirmButton = {
@@ -195,13 +155,140 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                     modifier = Modifier.fillMaxWidth().testTag("success_ok_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = Primary),
                     shape = MaterialTheme.shapes.medium
-                ) {
-                    Text("Odlično!")
-                }
+                ) { Text("Odlično!") }
             }
         )
     }
 
+    // ─── Confirm Dialog ───────────────────────────────────────────────────────
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.extraLarge,
+            icon = {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = PrimaryLight,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Info, null, tint = Primary, modifier = Modifier.size(32.dp))
+                    }
+                }
+            },
+            title = {
+                Text(
+                    "Potvrda rezervacije",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Provjeri detalje prije potvrde:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMuted
+                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = PrimaryLight,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row {
+                                Text("Vozilo: ", style = MaterialTheme.typography.labelMedium)
+                                Text(bike.name, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row {
+                                Text("Datum: ", style = MaterialTheme.typography.labelMedium)
+                                Text(selectedDateFormatted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row {
+                                Text("Trajanje: ", style = MaterialTheme.typography.labelMedium)
+                                Text("$hours ${if (hours == 1) "sat" else "sata"}", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row {
+                                Text("Lokacija: ", style = MaterialTheme.typography.labelMedium)
+                                Text(selectedLocation, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row {
+                                Text("Plaćanje: ", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    when (selectedPayment) {
+                                        "card" -> "Kreditna kartica"
+                                        "paypal" -> "PayPal"
+                                        else -> "Gotovina"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            HorizontalDivider(color = Border)
+                            Row {
+                                Text("Ukupno: ", style = MaterialTheme.typography.labelMedium)
+                                Text("$$total", style = MaterialTheme.typography.bodySmall, color = Primary)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmDialog = false
+                        val sdfLocal = SimpleDateFormat("dd. MM. yyyy.", Locale.getDefault())
+                        val startDate = sdfLocal.format(Date(datePickerState.selectedDateMillis!!))
+                        val endMillis = datePickerState.selectedDateMillis!! + (hours * 3600 * 1000L)
+                        val endDate = sdfLocal.format(Date(endMillis))
+                        val user = com.example.flowride.data.UserRepository.currentUser
+                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                        val rental = ActiveRental(
+                            id = "R${System.currentTimeMillis().toString().takeLast(6)}",
+                            vehicleType = bike.name,
+                            startDate = startDate,
+                            endDate = endDate,
+                            pickupLocation = selectedLocation,
+                            duration = "$hours ${if (hours == 1) "sat" else "sata"}",
+                            price = total,
+                            paymentMethod = selectedPayment,
+                            userName = user?.name ?: "Gost",
+                            userEmail = user?.email ?: "",
+                            uid = uid,
+                            durationMinutes = hours * 60
+                        )
+                        scope.launch {
+                            RentalRepository.addRental(rental)
+                            NotificationHelper.showReservationConfirmation(
+                                context = context,
+                                vehicleName = bike.name,
+                                date = startDate,
+                                location = selectedLocation,
+                                total = total
+                            )
+                        }
+                        showSuccessDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                    shape = MaterialTheme.shapes.medium
+                ) { Text("Potvrdi") }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showConfirmDialog = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) { Text("Vrati se") }
+            }
+        )
+    }
+
+    // ─── Date Picker Dialog ───────────────────────────────────────────────────
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -227,6 +314,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
         }
     }
 
+    // ─── Main Form ────────────────────────────────────────────────────────────
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -235,7 +323,6 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
 
-            // Naslov
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -253,11 +340,8 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
             HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = Border)
 
             // Datum
-            Text(
-                "Datum preuzimanja",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Text("Datum preuzimanja", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp))
             OutlinedTextField(
                 value = dateText,
                 onValueChange = { onDateTextChange(it) },
@@ -267,11 +351,10 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                     .testTag("date_input_field"),
                 label = { Text("Odaberi datum (dan. mj. god.)") },
                 shape = MaterialTheme.shapes.medium,
-                leadingIcon = {
-                    Icon(Icons.Outlined.CalendarToday, null, tint = Primary)
-                },
+                leadingIcon = { Icon(Icons.Outlined.CalendarToday, null, tint = Primary) },
                 trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }, modifier = Modifier.testTag("open_calendar_button")) {
+                    IconButton(onClick = { showDatePicker = true },
+                        modifier = Modifier.testTag("open_calendar_button")) {
                         Icon(Icons.Outlined.CalendarMonth, "Otvori kalendar", tint = Primary)
                     }
                 },
@@ -285,49 +368,29 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
             if (dateError) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Error, null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(15.dp)
-                    )
+                    Icon(Icons.Outlined.Error, null,
+                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Molimo odaberite datum danas ili u budućnosti.",
+                    Text("Molimo odaberite datum danas ili u budućnosti.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                        color = MaterialTheme.colorScheme.error)
                 }
             }
 
             // Trajanje
-            Text(
-                "Trajanje najma",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 4.dp)
-            ) {
-                IconButton(
-                    onClick = { if (hours > 1) hours-- },
-                    modifier = Modifier.size(36.dp)
-                ) {
+            Text("Trajanje najma", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 4.dp)) {
+                IconButton(onClick = { if (hours > 1) hours-- }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Outlined.Remove, "Remove", tint = Primary)
                 }
-                Text(
-                    "$hours ${if (hours == 1) "sat" else "sata"}",
+                Text("$hours ${if (hours == 1) "sat" else "sata"}",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                IconButton(
-                    onClick = { if (hours < 24) hours++ },
-                    modifier = Modifier.size(36.dp)
-                ) {
+                    modifier = Modifier.padding(horizontal = 12.dp))
+                IconButton(onClick = { if (hours < 24) hours++ }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Outlined.Add, "Add", tint = Primary)
                 }
             }
@@ -345,11 +408,8 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
             )
 
             // Lokacija
-            Text(
-                "Lokacija preuzimanja",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Text("Lokacija preuzimanja", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp))
             ExposedDropdownMenuBox(
                 expanded = locationExpanded,
                 onExpandedChange = { locationExpanded = it },
@@ -361,7 +421,9 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                     readOnly = true,
                     leadingIcon = { Icon(Icons.Outlined.LocationOn, null, tint = Primary) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(locationExpanded) },
-                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Primary,
@@ -377,10 +439,8 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                             text = { Text(loc.name) },
                             onClick = { selectedLocation = loc.name; locationExpanded = false },
                             leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.LocationOn, null,
-                                    tint = Primary, modifier = Modifier.size(18.dp)
-                                )
+                                Icon(Icons.Outlined.LocationOn, null,
+                                    tint = Primary, modifier = Modifier.size(18.dp))
                             }
                         )
                     }
@@ -388,24 +448,17 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
             }
 
             // Način plaćanja
-            Text(
-                "Način plaćanja",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 10.dp)
-            )
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
+            Text("Način plaćanja", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 16.dp)) {
                 paymentMethods.forEach { method ->
                     val isSelected = selectedPayment == method.id
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = isSelected,
-                                onClick = { selectedPayment = method.id }
-                            ),
+                        modifier = Modifier.fillMaxWidth().selectable(
+                            selected = isSelected,
+                            onClick = { selectedPayment = method.id }
+                        ),
                         shape = MaterialTheme.shapes.medium,
                         color = if (isSelected) PrimaryLight else MaterialTheme.colorScheme.surface,
                         border = androidx.compose.foundation.BorderStroke(
@@ -413,28 +466,19 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                             color = if (isSelected) Primary else Border
                         )
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                method.icon, null,
+                        Row(modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(method.icon, null,
                                 tint = if (isSelected) Primary else TextMuted,
-                                modifier = Modifier.size(22.dp)
-                            )
+                                modifier = Modifier.size(22.dp))
                             Spacer(Modifier.width(12.dp))
-                            Text(
-                                method.label,
+                            Text(method.label,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (isSelected) Primary else TextPrimary,
-                                modifier = Modifier.weight(1f)
-                            )
+                                modifier = Modifier.weight(1f))
                             if (isSelected) {
-                                Icon(
-                                    Icons.Outlined.CheckCircle, null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Icon(Icons.Outlined.CheckCircle, null,
+                                    tint = Primary, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -442,29 +486,17 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
             }
 
             // Ukupno
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                color = PrimaryLight
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
+            Surface(modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium, color = PrimaryLight) {
+                Row(modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                    verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text("Ukupno", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                        Text(
-                            "$hours ${if (hours == 1) "sat" else "sata"} × $${bike.pricePerHour}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TextMuted
-                        )
+                        Text("$hours ${if (hours == 1) "sat" else "sata"} × $${bike.pricePerHour}",
+                            style = MaterialTheme.typography.labelMedium, color = TextMuted)
                     }
-                    Text(
-                        "$$total",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Primary
-                    )
+                    Text("$$total", style = MaterialTheme.typography.headlineMedium, color = Primary)
                 }
             }
 
@@ -478,40 +510,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                         return@Button
                     }
                     dateError = false
-
-                    val sdf = SimpleDateFormat("dd. MM. yyyy.", Locale.getDefault())
-                    val startDate = sdf.format(Date(selectedMillis))
-                    val endMillis = selectedMillis + (hours * 3600 * 1000L)
-                    val endDate = sdf.format(Date(endMillis))
-
-                    val user = com.example.flowride.data.UserRepository.currentUser
-                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-                    val rental = ActiveRental(
-                        id = "R${System.currentTimeMillis().toString().takeLast(6)}",
-                        vehicleType = bike.name,
-                        startDate = startDate,
-                        endDate = endDate,
-                        pickupLocation = selectedLocation,
-                        duration = "$hours ${if (hours == 1) "sat" else "sata"}",
-                        price = total,
-                        paymentMethod = selectedPayment,
-                        userName = user?.name ?: "Gost",
-                        userEmail = user?.email ?: "",
-                        uid = uid,
-                        durationMinutes = hours * 60
-                    )
-
-                    scope.launch {
-                        RentalRepository.addRental(rental)
-                        NotificationHelper.showReservationConfirmation(
-                            context = context,
-                            vehicleName = bike.name,
-                            date = startDate,
-                            location = selectedLocation,
-                            total = total
-                        )
-                    }
-                    showSuccessDialog = true
+                    showConfirmDialog = true
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
@@ -529,9 +528,7 @@ fun BookingForm(bike: BikeModelFirestore, onClose: () -> Unit, onSuccess: () -> 
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 border = androidx.compose.foundation.BorderStroke(1.dp, Border)
-            ) {
-                Text("Odustani")
-            }
+            ) { Text("Odustani") }
         }
     }
 }

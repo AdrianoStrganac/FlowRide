@@ -25,14 +25,20 @@ import java.util.Locale
 fun RentalsScreen() {
     var activeTab by remember { mutableIntStateOf(0) }
     val allRentals = RentalRepository.rentals
+
+    val currentRentals = allRentals.filter {
+        it.status == "active" || it.status == "in_progress"
+    }
+    val pastRentals = allRentals.filter {
+        it.status == "completed" ||
+                (it.status != "active" && it.status != "in_progress")
+    }
+
     val tabs = listOf(
-        "Trenutni (${allRentals.count { it.status == "active" }})",
-        "Prošli (${allRentals.count { it.status == "completed" }})"
+        "Trenutni (${currentRentals.size})",
+        "Prošli (${pastRentals.size})"
     )
-    val filtered = if (activeTab == 0)
-        allRentals.filter { it.status == "active" }
-    else
-        allRentals.filter { it.status == "completed" }
+    val filtered = if (activeTab == 0) currentRentals else pastRentals
 
     var selectedRentalForQr by remember { mutableStateOf<ActiveRental?>(null) }
 
@@ -93,11 +99,11 @@ fun RentalsScreen() {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filtered) { rental -> 
+                items(filtered) { rental ->
                     RentalCard(
                         rental = rental,
                         onShowQr = { selectedRentalForQr = rental }
-                    ) 
+                    )
                 }
             }
         }

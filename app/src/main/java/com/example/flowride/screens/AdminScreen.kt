@@ -56,25 +56,18 @@ fun AdminRentalsTab() {
     val activity = context as? androidx.activity.ComponentActivity ?: return
     val coroutineScope = rememberCoroutineScope()
 
-    // Lokalna lista skeniranih najama - samo ono što admin skenira
-    var scannedRentals by remember { mutableStateOf<List<ActiveRental>>(emptyList()) }
+    val allRentals = RentalRepository.allRentalsForAdmin // ← perzistentno u repozitoriju
     var scannedRental by remember { mutableStateOf<ActiveRental?>(null) }
     var activeTab by remember { mutableIntStateOf(0) }
 
-    // Prati promjene statusa iz repozitorija za već skenirane najme
-    val allRentals = RentalRepository.allRentalsForAdmin
-    val updatedScannedRentals = scannedRentals.map { scanned ->
-        allRentals.find { it.id == scanned.id } ?: scanned
-    }
-
-    val active = updatedScannedRentals.filter { it.status == "active" || it.status == "in_progress" }
-    val completed = updatedScannedRentals.filter { it.status == "completed" }
+    val active = allRentals.filter { it.status == "active" || it.status == "in_progress" }
+    val completed = allRentals.filter { it.status == "completed" }
     val displayed = if (activeTab == 0) active else completed
 
-    // Dijalog za potvrdu aktivacije
     var confirmActivateRental by remember { mutableStateOf<ActiveRental?>(null) }
     var confirmCompleteRental by remember { mutableStateOf<ActiveRental?>(null) }
 
+    // Confirm dialozi ostaju isti, samo promijeni callbacks:
     if (confirmActivateRental != null) {
         AlertDialog(
             onDismissRequest = { confirmActivateRental = null },
@@ -87,7 +80,10 @@ fun AdminRentalsTab() {
                     onClick = {
                         coroutineScope.launch {
                             RentalRepository.startRental(confirmActivateRental!!.id)
-                            RentalRepository.loadRentals() // ← dodaj ovo
+                            RentalRepository.loadRentals()
+                            // Osvježi skenirani rental
+                            val updated = RentalRepository.findRentalById(confirmActivateRental!!.id)
+                            if (updated != null) RentalRepository.updateScannedRental(updated)
                             confirmActivateRental = null
                         }
                     },
@@ -96,10 +92,9 @@ fun AdminRentalsTab() {
                 ) { Text("Aktiviraj") }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { confirmActivateRental = null },
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("Odustani") }
+                OutlinedButton(onClick = { confirmActivateRental = null }, shape = MaterialTheme.shapes.medium) {
+                    Text("Odustani")
+                }
             }
         )
     }
@@ -116,7 +111,9 @@ fun AdminRentalsTab() {
                     onClick = {
                         coroutineScope.launch {
                             RentalRepository.confirmRental(confirmCompleteRental!!.id)
-                            RentalRepository.loadRentals() // ← dodaj ovo
+                            RentalRepository.loadRentals()
+                            val updated = RentalRepository.findRentalById(confirmCompleteRental!!.id)
+                            if (updated != null) RentalRepository.updateScannedRental(updated)
                             confirmCompleteRental = null
                         }
                     },
@@ -125,25 +122,24 @@ fun AdminRentalsTab() {
                 ) { Text("Završi") }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { confirmCompleteRental = null },
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("Odustani") }
+                OutlinedButton(onClick = { confirmCompleteRental = null }, shape = MaterialTheme.shapes.medium) {
+                    Text("Odustani")
+                }
             }
         )
     }
 
     if (scannedRental != null) {
         AdminScanDialog(
-            rental = allRentals.find { it.id == scannedRental!!.id } ?: scannedRental!!,
+            rental = scannedRental!!,
             onDismiss = { scannedRental = null },
             onActivate = {
-                val rental = allRentals.find { it.id == scannedRental!!.id } ?: scannedRental!!
+                val rental = scannedRental!!
                 scannedRental = null
                 confirmActivateRental = rental
             },
             onConfirm = {
-                val rental = allRentals.find { it.id == scannedRental!!.id } ?: scannedRental!!
+                val rental = scannedRental!!
                 scannedRental = null
                 confirmCompleteRental = rental
             }
@@ -158,10 +154,7 @@ fun AdminRentalsTab() {
                         coroutineScope.launch {
                             val rental = RentalRepository.findRentalById(result)
                             if (rental != null) {
-                                // Dodaj u listu ako već nije
-                                if (scannedRentals.none { it.id == rental.id }) {
-                                    scannedRentals = scannedRentals + rental
-                                }
+                                RentalRepository.addAndSaveScannedRental(rental)
                                 scannedRental = rental
                             }
                         }
@@ -210,20 +203,15 @@ fun AdminRentalsTab() {
                         modifier = Modifier.size(64.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Outlined.QrCodeScanner, null,
-                                tint = Primary, modifier = Modifier.size(30.dp)
-                            )
+                            Icon(Icons.Outlined.QrCodeScanner, null,
+                                tint = Primary, modifier = Modifier.size(30.dp))
                         }
                     }
                     Spacer(Modifier.height(16.dp))
                     Text("Nema skeniranih najama", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Skeniraj QR kod korisnikovog najma",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted
-                    )
+                    Text("Skeniraj QR kod korisnikovog najma",
+                        style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
         } else {
@@ -698,13 +686,14 @@ fun AdminVehicleCard(
     onDelete: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    
+    val isChecked = VehicleRepository.getEffectiveAvailability(vehicle.id)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         border = androidx.compose.foundation.BorderStroke(1.dp, Border),
         colors = CardDefaults.cardColors(
-            containerColor = if (vehicle.isAvailable) MaterialTheme.colorScheme.surface else SurfaceMuted
+            containerColor = if (isChecked) MaterialTheme.colorScheme.surface else SurfaceMuted
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -718,9 +707,9 @@ fun AdminVehicleCard(
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
-                            vehicle.name, 
+                            vehicle.name,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (vehicle.isAvailable) MaterialTheme.colorScheme.onSurface else TextMuted
+                            color = if (isChecked) MaterialTheme.colorScheme.onSurface else TextMuted
                         )
                         Text(
                             "${vehicle.categoryId} • $${vehicle.pricePerHour}/sat",
@@ -730,12 +719,11 @@ fun AdminVehicleCard(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Switch za dostupnost
                     Switch(
-                        checked = vehicle.isAvailable,
-                        onCheckedChange = { 
+                        checked = isChecked,
+                        onCheckedChange = { newValue ->
                             coroutineScope.launch {
-                                VehicleRepository.toggleAvailability(vehicle.id, vehicle.isAvailable)
+                                VehicleRepository.toggleAvailability(vehicle.id, newValue) // ← direktno newValue
                             }
                         },
                         colors = SwitchDefaults.colors(
@@ -744,7 +732,6 @@ fun AdminVehicleCard(
                         ),
                         modifier = Modifier.scale(0.7f)
                     )
-                    
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Outlined.Edit, null, tint = Primary)
                     }
@@ -761,7 +748,7 @@ fun AdminVehicleCard(
                     color = TextMuted
                 )
             }
-            if (!vehicle.isAvailable) {
+            if (!isChecked) {
                 Text(
                     "TRENUTNO NEDOSTUPNO",
                     style = MaterialTheme.typography.labelSmall,
@@ -773,6 +760,7 @@ fun AdminVehicleCard(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

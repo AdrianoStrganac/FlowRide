@@ -21,12 +21,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import com.example.flowride.components.BikeCardFirestore
+import com.example.flowride.components.CategoryShimmer
 import com.example.flowride.data.BikeCategoryFirestore
 import com.example.flowride.data.VehicleRepository
 import com.example.flowride.ui.theme.*
 import kotlinx.coroutines.launch
 
-// Zadržavamo stare klase zbog kompatibilnosti s ostalim dijelovima koda
 data class BikeModel(
     val id: String,
     val name: String,
@@ -85,28 +85,15 @@ fun HomeScreen(
         }
 
         if (isLoading) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Primary)
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "Učitavanje vozila...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted
-                        )
-                    }
-                }
+            items(5) {
+                CategoryShimmer()
             }
         } else {
             itemsIndexed(categories) { index, category ->
                 val isExpanded = expandedCategoryId == category.id
-                val models = VehicleRepository.getVehiclesForCategory(category.id)
+
+                // Koristimo repository metodu s filterom za dostupnost
+                val models = VehicleRepository.getVehiclesForCategory(category.id, onlyAvailable = true)
 
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     CategoryCardFirestore(
@@ -134,6 +121,7 @@ fun HomeScreen(
                                 BikeCardFirestore(
                                     bike = model,
                                     onClick = {
+                                        if(!model.isAvailable) return@BikeCardFirestore
                                         if (!isLoggedIn) {
                                             onLoginRequired()
                                             return@BikeCardFirestore
